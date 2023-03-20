@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: skymarket
+      POSTGRES_PASSWORD: skymarket
+      POSTGRES_DB: skymarket
+    restart: always
+    ports:
+    - "5432:5432"
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U skymarket']
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build: ../frontend_react
+    volumes:
+      - frontend:/app/build
+    depends_on:
+      - db
+      - backend
+
+  backend:
+    build:
+      context: ../../Coursework_6/skymarket
+    expose:
+      - 5000
+    depends_on:
+      - db
+      - migrate
+    volumes:
+      - ../skymarket/django_media/:/skymarket/django_media/
+
+  migrate:
+    build:
+      context: ../../Coursework_6/skymarket
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    command: > 
+      sh -c 'python3 manage.py makemigrations && python3 manage.py migrate && python3 manage.py loadall'
+
+  nginx_backend:
+    image: nginx:1.19.3
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nginx_backend.conf:/etc/nginx/conf.d/default.conf
+      - ../skymarket/django_static/:/usr/share/nginx/static/
+      - ../skymarket/django_media/:/usr/share/nginx/media/
+
+    depends_on:
+      - db
+      - backend
+      - frontend
+
+
+  nginx:
+    image: nginx:1.19.3
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../skymarket/django_static/:/usr/share/nginx/static/
+      - ../skymarket/django_media/:/usr/share/nginx/media/
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - frontend:/usr/share/nginx/html/
+    restart: always
+    depends_on:
+      - db
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:  
+  frontend:
